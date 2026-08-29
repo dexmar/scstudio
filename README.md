@@ -1,5 +1,24 @@
 # scstudio - Blender Import-Export for .scm and .sca file formats
 
+## Project Continuity Notice
+
+This project is an independent continuation and hard fork of the
+[scstudio](https://github.com/Solstice245/scstudio) repository originally created by
+**John Wharton** ([@Solstice245](https://github.com/Solstice245)).
+
+This repository serves as the new home for updates, bug fixes, and compatibility patches for
+newer Blender versions. All foundational credit goes to John Wharton for their incredible work
+building this addon.
+
+This project remains strictly licensed under the terms of the **GPL-2.0 License**.
+
+### Blender compatibility
+
+The addon manifest still declares a minimum of Blender 3.0, and the compatibility
+shims are written to keep the older code paths working. However, **all testing for
+this release was performed on Blender 5.1.1** — earlier versions are unverified.
+
+
 __Blender__ addon to ___import and export___ 3D model/animation files used in the game __Supreme Commander__
 
 Created by *John Wharton*
