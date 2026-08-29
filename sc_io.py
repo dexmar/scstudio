@@ -1,6 +1,11 @@
+# Original work Copyright (C) John Wharton (Solstice245)
+# Modified 2026-08-29 by dexmar: Blender 5.1 compatibility; vertex-weld fix
+# Licensed under the GNU General Public License v2.0
+
 from os import path
 import struct
 import math
+import re
 
 # modl description
 #    tag version bone_offset bone_count vertices_offset vert_unk vertices_count
@@ -226,3 +231,176 @@ def read_bp(filepath):
         ref[ks[-1]] = flat[k]
 
     return bpd
+
+
+def _strip_lua_comments(text):
+    cleaned = []
+    quote = None
+    escaped = False
+    ii = 0
+
+    while ii < len(text):
+        char = text[ii]
+        next_char = text[ii + 1] if ii + 1 < len(text) else ''
+
+        if quote:
+            cleaned.append(char)
+            if escaped:
+                escaped = False
+            elif char == '\\':
+                escaped = True
+            elif char == quote:
+                quote = None
+            ii += 1
+            continue
+
+        if char in ('"', "'"):
+            quote = char
+            cleaned.append(char)
+            ii += 1
+            continue
+
+        if char == '-' and next_char == '-':
+            while ii < len(text) and text[ii] not in '\r\n':
+                ii += 1
+            continue
+
+        if char == '#':
+            while ii < len(text) and text[ii] not in '\r\n':
+                ii += 1
+            continue
+
+        cleaned.append(char)
+        ii += 1
+
+    return ''.join(cleaned)
+
+
+def _find_matching_brace(text, open_index):
+    quote = None
+    escaped = False
+    depth = 0
+
+    for ii in range(open_index, len(text)):
+        char = text[ii]
+
+        if quote:
+            if escaped:
+                escaped = False
+            elif char == '\\':
+                escaped = True
+            elif char == quote:
+                quote = None
+            continue
+
+        if char in ('"', "'"):
+            quote = char
+            continue
+
+        if char == '{':
+            depth += 1
+        elif char == '}':
+            depth -= 1
+            if depth == 0:
+                return ii
+
+    return -1
+
+
+def _find_named_table(text, name):
+    pattern = re.compile(r'(?<![\w])' + re.escape(name) + r'\s*=\s*(?:[A-Za-z_]\w*\s*)?\{')
+    match = pattern.search(text)
+    if not match:
+        return None
+
+    open_index = text.find('{', match.start())
+    close_index = _find_matching_brace(text, open_index)
+    if close_index == -1:
+        return None
+
+    return text[open_index + 1:close_index]
+
+
+def _iter_top_level_tables(text):
+    quote = None
+    escaped = False
+    depth = 0
+    start = None
+
+    for ii, char in enumerate(text):
+        if quote:
+            if escaped:
+                escaped = False
+            elif char == '\\':
+                escaped = True
+            elif char == quote:
+                quote = None
+            continue
+
+        if char in ('"', "'"):
+            quote = char
+            continue
+
+        if char == '{':
+            if depth == 0:
+                start = ii + 1
+            depth += 1
+        elif char == '}':
+            depth -= 1
+            if depth == 0 and start is not None:
+                yield text[start:ii]
+                start = None
+
+
+def _parse_simple_lua_fields(text):
+    value_pattern = (
+        r"(?P<key>[A-Za-z_]\w*)\s*=\s*"
+        r"(?P<value>"
+        r"'(?:\\.|[^'])*'"
+        r'|"(?:\\.|[^"])*"'
+        r'|true|false'
+        r'|[-+]?\d+(?:\.\d+)?'
+        r")"
+    )
+
+    values = {}
+    for match in re.finditer(value_pattern, text):
+        raw_value = match.group('value')
+        if raw_value[0] in ('"', "'"):
+            value = raw_value[1:-1]
+        elif raw_value in ('true', 'false'):
+            value = raw_value == 'true'
+        elif '.' in raw_value:
+            value = float(raw_value)
+        else:
+            value = int(raw_value)
+
+        values[match.group('key')] = value
+
+    return values
+
+
+def read_bp_materials(filepath):
+    if not path.isfile(filepath):
+        return None
+
+    text = open(filepath, 'rb').read().decode()
+    text = _strip_lua_comments(text)
+
+    display = _find_named_table(text, 'Display')
+    if not display:
+        return None
+
+    mesh = _find_named_table(display, 'Mesh')
+    if not mesh:
+        return None
+
+    lods = _find_named_table(mesh, 'LODs')
+    if not lods:
+        return None
+
+    lod_values = [_parse_simple_lua_fields(lod) for lod in _iter_top_level_tables(lods)]
+    if not lod_values:
+        return None
+
+    return {'Display': {'Mesh': {'LODs': lod_values}}}

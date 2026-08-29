@@ -1,12 +1,26 @@
+# Original work Copyright (C) John Wharton (Solstice245)
+# Modified 2026-08-29 by dexmar: Blender 5.1 compatibility; vertex-weld fix
+# Licensed under the GNU General Public License v2.0
+
 import bpy
 import bmesh
 from mathutils import Matrix, Vector, Quaternion
 from os import path
 from .sc_mat import generate_bl_material
-from .sc_io import read_scm, read_sca, read_bp
+from .sc_io import read_scm, read_sca, read_bp, read_bp_materials
 
 
 co_correction_mat = Matrix(((1, 0, 0), ( 0, 0, 1), ( 0, -1, 0))).to_4x4()
+
+
+def action_fcurve_new(action, owner, data_path, index=0, action_group=''):
+    if hasattr(action, 'fcurves'):
+        return action.fcurves.new(data_path, index=index, action_group=action_group)
+
+    if owner.animation_data is None:
+        owner.animation_data_create()
+    owner.animation_data.action = action
+    return action.fcurve_ensure_for_datablock(owner, data_path, index=index, group_name=action_group)
 
 
 def sca(ob, dirname, filename):
@@ -18,6 +32,8 @@ def sca(ob, dirname, filename):
     anim = ob.sc_animations.add()
     anim.name = filename.rsplit('.')[0]
     anim.action = bpy.data.actions.new(anim.name)
+    ob.animation_data_create()
+    ob.animation_data.action = anim.action
 
     bones_frames = {sc_link:[] for sc_link in sc_links}
 
@@ -41,13 +57,13 @@ def sca(ob, dirname, filename):
         loc_path = 'pose.bones["{}"].location'.format(bone_name)
         rot_path = 'pose.bones["{}"].rotation_quaternion'.format(bone_name)
 
-        locx = anim.action.fcurves.new(loc_path, index=0, action_group=bone_name)
-        locy = anim.action.fcurves.new(loc_path, index=1, action_group=bone_name)
-        locz = anim.action.fcurves.new(loc_path, index=2, action_group=bone_name)
-        rotx = anim.action.fcurves.new(rot_path, index=0, action_group=bone_name)
-        roty = anim.action.fcurves.new(rot_path, index=1, action_group=bone_name)
-        rotz = anim.action.fcurves.new(rot_path, index=2, action_group=bone_name)
-        rotw = anim.action.fcurves.new(rot_path, index=3, action_group=bone_name)
+        locx = action_fcurve_new(anim.action, ob, loc_path, index=0, action_group=bone_name)
+        locy = action_fcurve_new(anim.action, ob, loc_path, index=1, action_group=bone_name)
+        locz = action_fcurve_new(anim.action, ob, loc_path, index=2, action_group=bone_name)
+        rotx = action_fcurve_new(anim.action, ob, rot_path, index=0, action_group=bone_name)
+        roty = action_fcurve_new(anim.action, ob, rot_path, index=1, action_group=bone_name)
+        rotz = action_fcurve_new(anim.action, ob, rot_path, index=2, action_group=bone_name)
+        rotw = action_fcurve_new(anim.action, ob, rot_path, index=3, action_group=bone_name)
 
         if not bone.parent:
             bone_loc_vec = bone.head_local @ bone.matrix_local
@@ -208,10 +224,13 @@ def scm_mesh_object(scm, arm_ob, dirname, filename, options, bp=None, lod=0):
     modifier = ob.modifiers.new('Armature', 'ARMATURE')
     modifier.object = arm_ob
 
-    modifier = ob.modifiers.new('EdgeSplit', 'EDGE_SPLIT')
-    modifier.use_edge_angle = False
+    try:
+        modifier = ob.modifiers.new('EdgeSplit', 'EDGE_SPLIT')
+        modifier.use_edge_angle = False
+    except TypeError:
+        pass
 
-    if options.get('generate_materials', True) and bp:
+    if options.get('generate_materials', True):
         generate_bl_material(dirname, filename, me, bp, lod)
 
     return ob
@@ -223,7 +242,16 @@ def scm(dirname, filename, options):
     sc_bones, sc_bone_names, sc_vertices, sc_faces = scm
 
     bp_path = path.join(dirname, '_'.join(sc_id.split('_')[:-1]) + '_unit.bp')
-    bp = read_bp(bp_path) if path.isfile(bp_path) else None
+    bp = None
+    if path.isfile(bp_path):
+        try:
+            bp = read_bp(bp_path)
+        except Exception as exc:
+            print(f"SCStudio: full blueprint parse failed for {bp_path}: {exc}")
+            try:
+                bp = read_bp_materials(bp_path)
+            except Exception as fallback_exc:
+                print(f"SCStudio: material blueprint parse failed for {bp_path}: {fallback_exc}")
 
     try: lod = int(sc_id.rsplit('_lod')[1][0])
     except (ValueError, IndexError) as e: lod = 0

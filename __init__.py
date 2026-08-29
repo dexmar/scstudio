@@ -7,14 +7,14 @@ from . import sc_export
 
 bl_info = {
     'name': 'Supreme Commander SCM & SCA format',
-    'author': 'Solstice245',
-    'version': (1, 0, 1),
+    'author': 'Solstice245, dexmar',
+    'version': (1, 1, 0),
     'blender': (3, 0, 0),
     'location': 'Properties Editor -> Object Data -> SupCom Model Data Panel',
     'description': 'Enables import and (eventually) export of Supreme Commander model data',
     'category': 'Import-Export',
-    'doc_url': 'https://github.com/Solstice245/scstudio/blob/master/README.md',
-    'tracker_url': 'https://github.com/Solstice245/scstudio/issues',
+    'doc_url': 'https://github.com/dexmar/scstudio/blob/main/README.md',
+    'tracker_url': 'https://github.com/dexmar/scstudio/issues',
 }
 
 
