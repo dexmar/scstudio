@@ -197,7 +197,13 @@ def scm_mesh(scm, me, options):
         sv0 = sc_vertices[origin.index]
         sv1 = sc_vertices[target.index]
 
-        if (*sv0[6:9], *sv0[12:18]) != (*sv0[6:9], *sv0[12:18]):
+        # Upstream bug: this compared sv0 against itself, so it was always False
+        # and the del never ran. Every coincident vertex was welded, including
+        # ones that differ in tangent or UV -- which is exactly how hard edges
+        # and UV seams are represented. Welding those merges distinct triangles
+        # into identical ones, and the duplicates are then discarded, so the
+        # mesh silently loses geometry. sv1 was computed and never used.
+        if (*sv0[6:9], *sv0[12:18]) != (*sv1[6:9], *sv1[12:18]):
             del doubles[origin]
     bmesh.ops.weld_verts(bm, targetmap=doubles)
 
