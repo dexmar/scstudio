@@ -25,7 +25,7 @@ Created by *John Wharton*
 
 ## Installation
 
-1. Download the most recent version at __(https://github.com/Solstice245/scstudio)__
+1. Download the most recent version from the [Releases page](https://github.com/dexmar/scstudio/releases) or clone this repository at __(https://github.com/dexmar/scstudio)__
 2. Install the addon using one of these methods:
 - __Option A__ (automatic):
     1. From the Blender menu, navigate to `Edit -> Preferences -> Add-ons`.
